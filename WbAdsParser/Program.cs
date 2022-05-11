@@ -8,14 +8,11 @@ while(true)
     if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(xInfo))
     {
         var adsProducts = await GetAdsProducts(key);
-        if (adsProducts.Count > 0)
+        if (adsProducts.Adverts.Count > 0)
         {
             string stringProsucts = ConvertProdcutsToString(adsProducts);
             var products = await GetProducts(xInfo, stringProsucts);
-            foreach (var product in products)
-            {
-                Console.WriteLine(product.id);
-            }
+            
         }
         else
         {
@@ -28,10 +25,34 @@ while(true)
     }
 }
 
-
-async Task<List<AdsProduct>> GetAdsProducts(string key)
+IEnumerable<Advert> GetFirstSubjectProducts(RootAds adsProducts)
 {
-    List< AdsProduct > products = new List< AdsProduct >();
+    var advers = adsProducts.Adverts
+        .Where(x => x.Subject == adsProducts.PrioritySubjects[0]);
+    return advers;
+}
+
+int GetMinTime(List<SearchProduct> products, IEnumerable<Advert> firstSubjectAdverts)
+{
+    int minNum = default;
+    foreach(var firstSubProduct in firstSubjectAdverts)
+    {
+        int time = products.FirstOrDefault(x => x.id == firstSubProduct.id)?.time2 ?? 0;
+        if(time > minNum)
+        {
+            minNum = time;
+        }
+    }
+    if(minNum < 21)
+    {
+        minNum = 21;
+    }
+    return minNum;
+}
+
+async Task<RootAds> GetAdsProducts(string key)
+{
+    RootAds products = new RootAds();
     using (var httpClient = new HttpClient())
     {
         using (var request = new HttpRequestMessage(new HttpMethod("GET"), $"https://catalog-ads.wildberries.ru/api/v5/search?keyword={key}"))
@@ -49,7 +70,7 @@ async Task<List<AdsProduct>> GetAdsProducts(string key)
 
             var response = await httpClient.SendAsync(request);
             var responseText = await response.Content.ReadAsStringAsync();
-            products = JToken.Parse(responseText)["adverts"]?.ToObject<List<AdsProduct>>() ?? new List<AdsProduct>();
+            products = JToken.Parse(responseText)?.ToObject<RootAds>() ?? new RootAds();
         }
     }
     return products;
@@ -114,27 +135,63 @@ async Task<string?> GetXInfo()
     return xInfo;
 }
 
-string ConvertProdcutsToString(List<AdsProduct> products)
+string ConvertProdcutsToString(RootAds products)
 {
     string productsString = string.Empty;
-    foreach (var product in products)
+    foreach (var product in products.Adverts)
     {
         productsString += $"{product.id};";
     }
     return productsString;
 }
 
-class Product
+public class Product
 {
+    [JsonProperty("id")]
     public int id { get; set; }
 }
 
-class AdsProduct : Product
-{
-    public int cpm { get; set; }
-}
-
-class SearchProduct : Product
+public class SearchProduct : Product
 {
     public int time2 { get; set; }
 }
+
+public class Advert : Product
+{
+    [JsonProperty("advertId")]
+    public int AdvertId { get; set; }
+
+    [JsonProperty("cpm")]
+    public int Cpm { get; set; }
+
+    [JsonProperty("code")]
+    public string Code { get; set; }
+
+    [JsonProperty("subject")]
+    public int Subject { get; set; }
+}
+
+public class Page
+{
+    [JsonProperty("page")]
+    public int NumPage { get; set; }
+
+    [JsonProperty("count")]
+    public int Count { get; set; }
+
+    [JsonProperty("positions")]
+    public List<int> Positions { get; set; }
+}
+
+public class RootAds
+{
+    [JsonProperty("pages")]
+    public List<Page> Pages { get; set; }
+
+    [JsonProperty("prioritySubjects")]
+    public List<int> PrioritySubjects { get; set; }
+
+    [JsonProperty("adverts")]
+    public List<Advert> Adverts { get; set; }
+}
+
